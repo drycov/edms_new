@@ -1,15 +1,42 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../shared/api/supabase';
+import { CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react';
 import { Card, CardContent } from '../../shared/ui/card';
 import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
 import { formatDate } from '../../shared/lib/utils';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Clock, FileText, Play } from 'lucide-react';
-import { taskStatusColors, taskStatusLabels } from '../../entities/workflow';
+
+type Task = {
+  id: string;
+  task_type: string;
+  status: string;
+  due_date: string | null;
+  created_at: string;
+  workflow_run: {
+    id: string;
+    document: {
+      id: string;
+      title: string;
+      registration_number: string | null;
+    };
+    workflow: {
+      name: string;
+    };
+  };
+};
+
+const statusColors: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-800',
+  in_progress: 'bg-blue-100 text-blue-800',
+  completed: 'bg-green-100 text-green-800',
+  delegated: 'bg-gray-100 text-gray-800',
+};
 
 export function TasksPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+
   const { data: tasks, isLoading } = useQuery({
     queryKey: ['my-tasks'],
     queryFn: async () => {
@@ -19,123 +46,188 @@ export function TasksPage() {
       const { data, error } = await supabase
         .from('workflow_tasks')
         .select(`
-          *,
-          node:workflow_nodes(
-            id,
-            name,
-            node_key,
-            node_type
-          ),
+          id,
+          task_type,
+          status,
+          due_date,
+          created_at,
           workflow_run:workflow_runs(
             id,
-            status,
-            document_id,
-            variables,
-            workflow:workflows(name, code)
+            document:documents(
+              id,
+              title,
+              registration_number
+            ),
+            workflow:workflows(name)
           )
         `)
         .eq('assignee_id', user.id)
+        .in('status', ['pending', 'in_progress'])
+        .order('due_date', { ascending: true })
         .order('created_at', { ascending: true });
 
       if (error) throw error;
+      return data as Task[];
+    },
+  });
 
+  const { data: completedTasks } = useQuery({
+    queryKey: ['completed-tasks'],
+    queryFn: async () => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('workflow_tasks')
+        .select(`
+          id,
+          task_type,
+          status,
+          completed_at,
+          workflow_run:workflow_runs(
+            id,
+            document:documents(
+              id,
+              title,
+              registration_number
+            )
+          )
+        `)
+        .eq('assignee_id', user.id)
+        .in('status', ['completed', 'delegated'])
+        .order('completed_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
       return data;
     },
   });
 
-  const pendingTasks = tasks?.filter((t: any) => t.status === 'pending') || [];
-  const inProgressTasks = tasks?.filter((t: any) => t.status === 'in_progress') || [];
-  const completedTasks = tasks?.filter((t: any) => t.status === 'completed') || [];
+  const getTaskTypeLabel = (type: string) => {
+    switch (type) {
+      case 'approval':
+        return t('approvals.title');
+      case 'signature':
+        return t('workflows.signature');
+      case 'review':
+        return 'Review';
+      case 'task':
+        return t('workflows.task');
+      default:
+        return type;
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return t('tasks.pending');
+      case 'in_progress':
+        return t('tasks.inProgress');
+      case 'completed':
+        return t('tasks.completed');
+      case 'delegated':
+        return t('tasks.delegated');
+      default:
+        return status;
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
-        <p className="text-gray-500 mt-1">Tasks assigned to you across all workflows</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('tasks.title')}</h1>
+        <p className="text-gray-500 mt-1">{t('tasks.subtitle')}</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{pendingTasks.length}</p>
-                <p className="text-sm text-gray-500">Pending</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-4">
+          <h2 className="font-semibold text-gray-900">{t('tasks.pending')} ({tasks?.length || 0})</h2>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Play className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{inProgressTasks.length}</p>
-                <p className="text-sm text-gray-500">In Progress</p>
-              </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{completedTasks.length}</p>
-                <p className="text-sm text-gray-500">Completed</p>
-              </div>
+          ) : tasks?.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 text-gray-500">
+                <CheckCircle className="h-12 w-12 mb-4 text-gray-300" />
+                <p className="font-medium">{t('approvals.allCaughtUp')}</p>
+                <p className="text-sm">{t('notifications.noNotifications')}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {tasks?.map((task) => (
+                <Card
+                  key={task.id}
+                  className="hover:border-blue-300 cursor-pointer"
+                  onClick={() => navigate(`/documents/${task.workflow_run?.document?.id}`)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-cyan-100 flex items-center justify-center">
+                          <FileText className="h-4 w-4 text-cyan-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {task.workflow_run?.document?.title || 'Document'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {getTaskTypeLabel(task.task_type)} - {task.workflow_run?.workflow?.name}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {task.due_date && new Date(task.due_date) < new Date() && (
+                          <AlertCircle className="h-4 w-4 text-red-500" />
+                        )}
+                        <Badge className={statusColors[task.status]}>
+                          {getStatusLabel(task.status)}
+                        </Badge>
+                        {task.due_date && (
+                          <span className="text-xs text-gray-500">
+                            <Clock className="h-3 w-3 inline mr-1" />
+                            {formatDate(task.due_date)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          )}
         </div>
-      ) : (
+
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">All Tasks</h2>
-          <div className="grid gap-3">
-            {tasks?.map((task: any) => (
-              <Card key={task.id} className="hover:border-blue-300 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-lg bg-gray-100 flex items-center justify-center">
-                        <FileText className="h-4 w-4 text-gray-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{task.node?.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {task.workflow_run?.workflow?.name}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge className={taskStatusColors[task.status]}>
-                        {taskStatusLabels[task.status]}
-                      </Badge>
-                      <span className="text-xs text-gray-400">
-                        {formatDate(task.created_at, 'relative')}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <h2 className="font-semibold text-gray-900">{t('tasks.completed')}</h2>
+
+          {completedTasks?.length === 0 ? (
+            <Card>
+              <CardContent className="py-4 text-center text-gray-500 text-sm">
+                {t('common.none')}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {completedTasks?.slice(0, 10).map((task: any) => (
+                <Card key={task.id}>
+                  <CardContent className="p-3">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {task.workflow_run?.document?.title || 'Document'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {task.completed_at ? formatDate(task.completed_at) : '-'}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -1,41 +1,40 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { supabase } from '../../shared/api/supabase';
 import { FileText, Mail, Lock, Loader2 } from 'lucide-react';
-import { useAuth } from '../../shared/lib/auth-context';
 import { Button } from '../../shared/ui/button';
 import { Input } from '../../shared/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../shared/ui/card';
-
-const schema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-});
-
-type FormData = z.infer<typeof schema>;
+import { useTranslation } from 'react-i18next';
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
-  });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
 
-  const onSubmit = async (data: FormData) => {
     try {
-      setError(null);
-      await signIn(data.email, data.password);
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        throw signInError;
+      }
+
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,16 +46,16 @@ export function LoginPage() {
             <FileText className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white">EDMS Platform</h1>
-          <p className="text-slate-400 mt-2">Enterprise Document Management System</p>
+          <p className="text-slate-400 mt-2">{t('auth.loginSubtitle')}</p>
         </div>
 
         <Card>
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl">Sign in</CardTitle>
-            <CardDescription>Enter your credentials to access the system</CardDescription>
+            <CardTitle className="text-2xl">{t('auth.signIn')}</CardTitle>
+            <CardDescription>{t('auth.loginSubtitle')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-200">
                   <p className="text-sm text-red-600">{error}</p>
@@ -64,41 +63,43 @@ export function LoginPage() {
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Email</label>
+                <label className="text-sm font-medium text-gray-700">{t('auth.email')}</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <Input
-                    {...register('email')}
                     type="email"
-                    placeholder="name@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@edms.demo"
                     className="pl-10"
-                    error={errors.email?.message}
+                    required
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Password</label>
+                <label className="text-sm font-medium text-gray-700">{t('auth.password')}</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <Input
-                    {...register('password')}
                     type="password"
-                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Demo123456!"
                     className="pl-10"
-                    error={errors.password?.message}
+                    required
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Signing in...
                   </>
                 ) : (
-                  'Sign in'
+                  t('auth.signIn')
                 )}
               </Button>
             </form>

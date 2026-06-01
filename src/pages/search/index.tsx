@@ -1,125 +1,205 @@
-import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Search as SearchIcon, Filter, X, FileText } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '../../shared/api/supabase';
+import { Search, FileText, GitBranch, Files } from 'lucide-react';
 import { Input } from '../../shared/ui/input';
-import { Button } from '../../shared/ui/button';
 import { Card, CardContent } from '../../shared/ui/card';
 import { Badge } from '../../shared/ui/badge';
-import { useDocuments } from '../../entities/document';
+import { useTranslation } from 'react-i18next';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { formatDate } from '../../shared/lib/utils';
 
 export function SearchPage() {
-  const [searchParams] = useSearchParams();
-  const initialQuery = searchParams.get('q') || '';
-  const [query, setQuery] = useState(initialQuery);
-  const [showFilters, setShowFilters] = useState(false);
+  const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const query = searchParams.get('q') || '';
 
-  const { data: results, isLoading } = useDocuments({
-    search: query || undefined,
+  const { data: results, isLoading } = useQuery({
+    queryKey: ['search', query],
+    queryFn: async () => {
+      if (!query || query.length < 2) return null;
+
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!profile?.organization_id) throw new Error('No organization');
+
+      // Search documents
+      const { data: documents } = await supabase
+        .from('documents')
+        .select('id, title, description, status, registration_number, created_at')
+        .eq('organization_id', profile.organization_id)
+        .eq('is_deleted', false)
+        .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
+        .limit(20);
+
+      // Search workflows
+      const { data: workflows } = await supabase
+        .from('workflows')
+        .select('id, name, description, is_active')
+        .eq('organization_id', profile.organization_id)
+        .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+        .limit(10);
+
+      // Search templates
+      const { data: templates } = await supabase
+        .from('document_templates')
+        .select('id, name, code, template_type')
+        .eq('organization_id', profile.organization_id)
+        .or(`name.ilike.%${query}%,code.ilike.%${query}%`)
+        .limit(10);
+
+      return {
+        documents: documents || [],
+        workflows: workflows || [],
+        templates: templates || [],
+        total: (documents?.length || 0) + (workflows?.length || 0) + (templates?.length || 0),
+      };
+    },
+    enabled: query.length >= 2,
   });
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Perform search
+    const formData = new FormData(e.currentTarget);
+    const searchTerm = formData.get('search') as string;
+    setSearchParams({ q: searchTerm });
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Search</h1>
-        <p className="text-gray-500 mt-1">Full-text search across all documents</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('search.title')}</h1>
+        <p className="text-gray-500 mt-1">{t('search.subtitle')}</p>
       </div>
 
       <form onSubmit={handleSearch}>
-        <div className="flex gap-3">
-          <div className="relative flex-1">
-            <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
-              type="search"
-              placeholder="Search documents, templates, workflows..."
-              className="pl-10"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </Button>
-          <Button type="submit">Search</Button>
+        <div className="relative max-w-2xl">
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+          <Input
+            type="search"
+            name="search"
+            defaultValue={query}
+            placeholder={t('search.placeholder')}
+            className="h-12 pl-12 text-base"
+          />
         </div>
       </form>
 
-      {showFilters && (
-        <Card className="p-4">
-          <div className="grid gap-4 md:grid-cols-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
-              <Input type="date" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
-              <Input type="date" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
-              <Input placeholder="All types" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <Input placeholder="All statuses" />
-            </div>
-          </div>
-        </Card>
-      )}
-
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-gray-500">
-            {results?.length || 0} results
-            {query && ` for "${query}"`}
-          </p>
+      {isLoading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
+      ) : !query || query.length < 2 ? (
+        <div className="text-center py-12 text-gray-500">
+          <Search className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <p>{t('search.placeholder')}</p>
+        </div>
+      ) : results?.total === 0 ? (
+        <div className="text-center py-12 text-gray-500">
+          <Search className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <p className="font-medium">{t('search.noResults')}</p>
+          <p className="text-sm">{t('search.tryDifferent')}</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <p className="text-sm text-gray-500">
+            {results?.total} {t('search.results')} "{query}"
+          </p>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
-        ) : results?.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-            <FileText className="h-12 w-12 mb-4 text-gray-300" />
-            <p className="font-medium">No results found</p>
-            <p className="text-sm">Try a different search term or filter</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {results?.map((doc) => (
-              <Card key={doc.id} className="hover:border-blue-300 cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
-                    <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <FileText className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900">{doc.title}</h3>
-                      {doc.description && (
-                        <p className="text-sm text-gray-500 mt-1 truncate">
-                          {doc.description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2">
-                        <Badge variant="secondary">{doc.status}</Badge>
-                        <span className="text-xs text-gray-400">
-                          {doc.registration_number || 'Not registered'}
-                        </span>
+          {results?.documents && results.documents.length > 0 && (
+            <div>
+              <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                {t('documents.title')} ({results.documents.length})
+              </h2>
+              <div className="space-y-2">
+                {results.documents.map((doc: any) => (
+                  <Card
+                    key={doc.id}
+                    className="hover:border-blue-300 cursor-pointer"
+                    onClick={() => navigate(`/documents/${doc.id}`)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">{doc.title}</p>
+                          <p className="text-sm text-gray-500">{doc.registration_number || '-'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge>{doc.status}</Badge>
+                          <span className="text-xs text-gray-500">{formatDate(doc.created_at)}</span>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {results?.workflows && results.workflows.length > 0 && (
+            <div>
+              <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <GitBranch className="h-5 w-5" />
+                {t('workflows.title')} ({results.workflows.length})
+              </h2>
+              <div className="space-y-2">
+                {results.workflows.map((wf: any) => (
+                  <Card
+                    key={wf.id}
+                    className="hover:border-blue-300 cursor-pointer"
+                    onClick={() => navigate('/workflows')}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-gray-900">{wf.name}</p>
+                        <Badge variant={wf.is_active ? 'success' : 'secondary'}>
+                          {wf.is_active ? t('workflows.active') : t('workflows.inactive')}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {results?.templates && results.templates.length > 0 && (
+            <div>
+              <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Files className="h-5 w-5" />
+                {t('templates.title')} ({results.templates.length})
+              </h2>
+              <div className="space-y-2">
+                {results.templates.map((tpl: any) => (
+                  <Card
+                    key={tpl.id}
+                    className="hover:border-blue-300 cursor-pointer"
+                    onClick={() => navigate('/templates')}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">{tpl.name}</p>
+                          <p className="text-sm text-gray-500">{tpl.code}</p>
+                        </div>
+                        <Badge variant="secondary">{tpl.template_type}</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

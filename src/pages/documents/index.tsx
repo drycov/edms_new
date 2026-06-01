@@ -1,23 +1,105 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-react';
-import { useDocuments } from '../../entities/document';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../../shared/api/supabase';
+import { Plus, Search, Eye, Edit, Trash2, FileText } from 'lucide-react';
 import { Badge } from '../../shared/ui/badge';
 import { Button } from '../../shared/ui/button';
 import { Input } from '../../shared/ui/input';
 import { Card } from '../../shared/ui/card';
 import { formatDate } from '../../shared/lib/utils';
-import { documentStatusLabels, documentStatusColors } from '../../entities/document';
-import type { DocumentStatus } from '../../entities/document';
+import { useTranslation } from 'react-i18next';
+import { toast } from '../../shared/ui/toaster';
+
+type DocumentStatus = 'draft' | 'registered' | 'in_workflow' | 'pending_approval' | 'approved' | 'rejected' | 'signed' | 'archived';
+
+type Document = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: DocumentStatus;
+  registration_number: string | null;
+  registration_date: string | null;
+  version_label: string;
+  created_at: string;
+  document_type: { name: string } | null;
+};
+
+const statusColors: Record<DocumentStatus, string> = {
+  draft: 'bg-gray-100 text-gray-800',
+  registered: 'bg-blue-100 text-blue-800',
+  in_workflow: 'bg-cyan-100 text-cyan-800',
+  pending_approval: 'bg-amber-100 text-amber-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+  signed: 'bg-emerald-100 text-emerald-800',
+  archived: 'bg-slate-100 text-slate-800',
+};
 
 export function DocumentsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<DocumentStatus[]>([]);
+  const [statusFilter, setStatusFilter] = useState<DocumentStatus | ''>('');
 
-  const { data: documents, isLoading } = useDocuments({
-    search,
-    status: statusFilter.length > 0 ? statusFilter : undefined,
+  const { data: documents, isLoading } = useQuery({
+    queryKey: ['documents', search, statusFilter],
+    queryFn: async () => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!profile?.organization_id) throw new Error('No organization');
+
+      let query = supabase
+        .from('documents')
+        .select(`
+          id,
+          title,
+          description,
+          status,
+          registration_number,
+          registration_date,
+          version_label,
+          created_at,
+          document_type:document_types(name)
+        `)
+        .eq('organization_id', profile.organization_id)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+      }
+
+      if (statusFilter) {
+        query = query.eq('status', statusFilter);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as Document[];
+    },
+  });
+
+  const deleteDocument = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('documents')
+        .update({ is_deleted: true })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      toast.success(t('common.success'), t('common.delete'));
+    },
   });
 
   const statuses: DocumentStatus[] = [
@@ -31,16 +113,21 @@ export function DocumentsPage() {
     'archived',
   ];
 
+  const getStatusLabel = (status: DocumentStatus) => {
+    const key = `documents.${status}`;
+    return t(key);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-          <p className="text-gray-500 mt-1">Manage and track all organizational documents</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('documents.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('documents.subtitle')}</p>
         </div>
         <Button onClick={() => navigate('/documents/create')}>
           <Plus className="h-4 w-4 mr-2" />
-          New Document
+          {t('documents.newDocument')}
         </Button>
       </div>
 
@@ -50,7 +137,7 @@ export function DocumentsPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <Input
               type="search"
-              placeholder="Search documents..."
+              placeholder={t('search.placeholder')}
               className="pl-10"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -58,23 +145,27 @@ export function DocumentsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setStatusFilter('')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === ''
+                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {t('common.all')}
+            </button>
             {statuses.map((status) => (
               <button
                 key={status}
-                onClick={() => {
-                  if (statusFilter.includes(status)) {
-                    setStatusFilter(statusFilter.filter((s) => s !== status));
-                  } else {
-                    setStatusFilter([...statusFilter, status]);
-                  }
-                }}
+                onClick={() => setStatusFilter(statusFilter === status ? '' : status)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  statusFilter.includes(status)
+                  statusFilter === status
                     ? 'bg-blue-100 text-blue-800 border border-blue-300'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {documentStatusLabels[status]}
+                {getStatusLabel(status)}
               </button>
             ))}
           </div>
@@ -89,8 +180,8 @@ export function DocumentsPage() {
         ) : documents?.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-500">
             <FileText className="h-12 w-12 mb-4 text-gray-300" />
-            <p className="font-medium">No documents found</p>
-            <p className="text-sm">Get started by creating a new document</p>
+            <p className="font-medium">{t('documents.noDocuments')}</p>
+            <p className="text-sm">{t('documents.noDocumentsDesc')}</p>
           </div>
         ) : (
           <Card>
@@ -98,12 +189,12 @@ export function DocumentsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-gray-50">
-                    <th className="p-4 text-left text-sm font-medium text-gray-500">Document</th>
-                    <th className="p-4 text-left text-sm font-medium text-gray-500">Registration</th>
-                    <th className="p-4 text-left text-sm font-medium text-gray-500">Status</th>
-                    <th className="p-4 text-left text-sm font-medium text-gray-500">Type</th>
-                    <th className="p-4 text-left text-sm font-medium text-gray-500">Created</th>
-                    <th className="p-4 text-left text-sm font-medium text-gray-500">Actions</th>
+                    <th className="p-4 text-left text-sm font-medium text-gray-500">{t('documents.title_field')}</th>
+                    <th className="p-4 text-left text-sm font-medium text-gray-500">{t('documents.registrationNumber')}</th>
+                    <th className="p-4 text-left text-sm font-medium text-gray-500">{t('common.status')}</th>
+                    <th className="p-4 text-left text-sm font-medium text-gray-500">{t('common.type')}</th>
+                    <th className="p-4 text-left text-sm font-medium text-gray-500">{t('common.created')}</th>
+                    <th className="p-4 text-left text-sm font-medium text-gray-500">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -136,8 +227,8 @@ export function DocumentsPage() {
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${documentStatusColors[doc.status as DocumentStatus]}`}>
-                          {documentStatusLabels[doc.status as DocumentStatus]}
+                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[doc.status]}`}>
+                          {getStatusLabel(doc.status)}
                         </span>
                       </td>
                       <td className="p-4">
@@ -170,6 +261,17 @@ export function DocumentsPage() {
                           >
                             <Edit className="h-4 w-4 text-gray-500" />
                           </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(t('common.confirm'))) {
+                                deleteDocument.mutate(doc.id);
+                              }
+                            }}
+                            className="p-2 rounded hover:bg-gray-100"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -181,28 +283,5 @@ export function DocumentsPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function FileText(props: any) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </svg>
   );
 }

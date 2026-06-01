@@ -1,17 +1,42 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../shared/api/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
+import { CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
+import { Card, CardContent } from '../../shared/ui/card';
 import { Badge } from '../../shared/ui/badge';
 import { Button } from '../../shared/ui/button';
+import { Textarea } from '../../shared/ui/textarea';
 import { formatDate } from '../../shared/lib/utils';
+import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, Clock, User, FileText } from 'lucide-react';
-import { taskStatusColors, taskStatusLabels } from '../../entities/workflow';
+import { toast } from '../../shared/ui/toaster';
+
+type ApprovalTask = {
+  id: string;
+  status: string;
+  due_date: string | null;
+  created_at: string;
+  workflow_run: {
+    id: string;
+    document: {
+      id: string;
+      title: string;
+      registration_number: string | null;
+    };
+    workflow: {
+      name: string;
+    };
+  };
+};
 
 export function ApprovalsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [comment, setComment] = useState<Record<string, string>>({});
+
   const { data: tasks, isLoading } = useQuery({
-    queryKey: ['approvals'],
+    queryKey: ['approval-tasks'],
     queryFn: async () => {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) throw new Error('Not authenticated');
@@ -19,36 +44,81 @@ export function ApprovalsPage() {
       const { data, error } = await supabase
         .from('workflow_tasks')
         .select(`
-          *,
-          node:workflow_nodes(
-            id,
-            name,
-            node_key,
-            node_type
-          ),
-          assignee:profiles(id, full_name, avatar_url, position),
+          id,
+          status,
+          due_date,
+          created_at,
           workflow_run:workflow_runs(
             id,
-            status,
-            document_id,
-            workflow:workflows(name, code)
+            document:documents(
+              id,
+              title,
+              registration_number
+            ),
+            workflow:workflows(name)
           )
         `)
         .eq('assignee_id', user.id)
+        .eq('task_type', 'approval')
         .in('status', ['pending', 'in_progress'])
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-
-      return data;
+      return data as ApprovalTask[];
     },
   });
+
+  const approveTask = useMutation({
+    mutationFn: async ({ taskId, approved, commentText }: { taskId: string; approved: boolean; commentText?: string }) => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error('Not authenticated');
+
+      const { error: updateError } = await supabase
+        .from('workflow_tasks')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          outcome: approved ? 'approved' : 'rejected',
+          comment: commentText || null,
+        })
+        .eq('id', taskId);
+
+      if (updateError) throw updateError;
+
+      // Create workflow event
+      const { data: task } = await supabase
+        .from('workflow_tasks')
+        .select('workflow_run_id')
+        .eq('id', taskId)
+        .single();
+
+      if (task) {
+        await supabase.from('workflow_events').insert({
+          workflow_run_id: task.workflow_run_id,
+          event_type: approved ? 'task_approved' : 'task_rejected',
+          data: { task_id: taskId, user_id: user.id, comment: commentText },
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['approval-tasks'] });
+      toast.success(t('common.success'), t('approvals.approve'));
+    },
+  });
+
+  const handleApprove = (taskId: string, approved: boolean) => {
+    approveTask.mutate({
+      taskId,
+      approved,
+      commentText: comment[taskId],
+    });
+  };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Approvals</h1>
-        <p className="text-gray-500 mt-1">Documents waiting for your approval</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('approvals.title')}</h1>
+        <p className="text-gray-500 mt-1">{t('approvals.subtitle')}</p>
       </div>
 
       {isLoading ? (
@@ -58,63 +128,78 @@ export function ApprovalsPage() {
       ) : tasks?.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">
           <CheckCircle className="h-12 w-12 mb-4 text-gray-300" />
-          <p className="font-medium">All caught up!</p>
-          <p className="text-sm">No pending approvals</p>
+          <p className="font-medium">{t('approvals.allCaughtUp')}</p>
+          <p className="text-sm">{t('approvals.noPending')}</p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {tasks?.map((task: any) => (
-            <Card key={task.id} className="hover:border-blue-300 transition-colors cursor-pointer">
+        <div className="space-y-4">
+          {tasks?.map((task) => (
+            <Card key={task.id}>
               <CardContent className="p-6">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between mb-4">
                   <div className="flex items-start gap-4">
-                    <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <FileText className="h-5 w-5 text-blue-600" />
+                    <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                      <FileText className="h-5 w-5 text-amber-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{task.node?.name}</h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {task.workflow_run?.workflow?.name}
+                      <h3 className="font-semibold text-gray-900">
+                        {task.workflow_run?.document?.title || 'Document'}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {task.workflow_run?.document?.registration_number || t('documents.notRegistered')}
                       </p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatDate(task.created_at, 'relative')}
-                        </span>
-                        {task.due_date && (
-                          <span className={new Date(task.due_date) < new Date() ? 'text-red-500' : ''}>
-                            Due: {formatDate(task.due_date)}
-                          </span>
-                        )}
-                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {task.workflow_run?.workflow?.name || 'Workflow'}
+                      </p>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="warning">{t('approvals.pending')}</Badge>
+                    {task.due_date && (
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        <Clock className="h-3 w-3" />
+                        {formatDate(task.due_date)}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${taskStatusColors[task.status]}`}>
-                      {taskStatusLabels[task.status]}
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          // Reject
-                        }}
-                      >
-                        <XCircle className="h-4 w-4 mr-1" />
-                        Reject
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          // Approve
-                        }}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Approve
-                      </Button>
-                    </div>
+                <div className="mb-4">
+                  <Textarea
+                    value={comment[task.id] || ''}
+                    onChange={(e) => setComment({ ...comment, [task.id]: e.target.value })}
+                    placeholder={t('documents.comments')}
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <span className="text-xs text-gray-500">
+                    {t('common.created')}: {formatDate(task.created_at)}
+                  </span>
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate(`/documents/${task.workflow_run?.document?.id}`)}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      {t('documents.documentDetails')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleApprove(task.id, false)}
+                      disabled={approveTask.isPending}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      {t('approvals.reject')}
+                    </Button>
+                    <Button
+                      onClick={() => handleApprove(task.id, true)}
+                      disabled={approveTask.isPending}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      {t('approvals.approve')}
+                    </Button>
                   </div>
                 </div>
               </CardContent>
