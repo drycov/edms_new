@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { Shield, Activity, Filter, Download } from 'lucide-react';
-import { Card, CardContent } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
-import { Input } from '../../shared/ui/input';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
 import { useTranslation } from 'react-i18next';
-import { formatDate } from '../../shared/lib/utils';
+import { formatDate } from '@/shared/lib/utils';
 import { useState } from 'react';
 
 type AuditLog = {

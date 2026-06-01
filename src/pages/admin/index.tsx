@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { Settings, Users, Building, Shield, Database, Zap } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 

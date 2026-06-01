@@ -1,7 +1,7 @@
 import { Outlet, Navigate } from 'react-router-dom';
-import { Sidebar } from '../widgets/sidebar';
-import { Header } from '../widgets/header';
-import { useAuth } from '../shared/lib/auth-context';
+import { Sidebar } from '@/widgets/sidebar';
+import { Header } from '@/widgets/header';
+import { useAuth } from '@/shared/lib/auth-context';
 
 export function Layout() {
   const { user, loading } = useAuth();

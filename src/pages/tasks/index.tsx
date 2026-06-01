@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react';
-import { Card, CardContent } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { formatDate } from '../../shared/lib/utils';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 

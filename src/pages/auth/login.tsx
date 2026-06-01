@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { FileText, Mail, Lock, Loader2 } from 'lucide-react';
-import { Button } from '../../shared/ui/button';
-import { Input } from '../../shared/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../shared/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/ui/card';
 import { useTranslation } from 'react-i18next';
 
 export function LoginPage() {

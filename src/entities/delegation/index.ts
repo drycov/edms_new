@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../api/supabase';
+import { supabase } from '@/shared/api/supabase';
 
 // Hook to delegate task
 export function useDelegateTask() {

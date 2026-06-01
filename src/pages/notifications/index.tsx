@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { Bell, CheckCheck, Trash2, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
-import { Card, CardContent } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
-import { formatDate } from '../../shared/lib/utils';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
+import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { toast } from '../../shared/ui/toaster';
+import { toast } from '@/shared/ui/toaster';
 
 type Notification = {
   id: string;

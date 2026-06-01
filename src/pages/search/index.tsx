@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { Search, FileText, GitBranch, Files } from 'lucide-react';
-import { Input } from '../../shared/ui/input';
-import { Card, CardContent } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
+import { Input } from '@/shared/ui/input';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { formatDate } from '../../shared/lib/utils';
+import { formatDate } from '@/shared/lib/utils';
 
 export function SearchPage() {
   const { t } = useTranslation();

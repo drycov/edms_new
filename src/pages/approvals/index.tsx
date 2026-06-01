@@ -1,15 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
-import { Card, CardContent } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
-import { Textarea } from '../../shared/ui/textarea';
-import { formatDate } from '../../shared/lib/utils';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
+import { Textarea } from '@/shared/ui/textarea';
+import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from '../../shared/ui/toaster';
+import { toast } from '@/shared/ui/toaster';
 
 type ApprovalTask = {
   id: string;

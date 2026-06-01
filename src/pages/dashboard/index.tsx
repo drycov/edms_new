@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { formatDate, formatNumber } from '../../shared/lib/utils';
+import { supabase } from '@/shared/api/supabase';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { formatDate, formatNumber } from '@/shared/lib/utils';
 import {
   FileText,
   GitBranch,

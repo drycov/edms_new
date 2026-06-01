@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
-import { Button } from '../../shared/ui/button';
-import { Input } from '../../shared/ui/input';
-import { Textarea } from '../../shared/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
-import { Select } from '../../shared/ui/select';
-import { toast } from '../../shared/ui/toaster';
+import { supabase } from '@/shared/api/supabase';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Textarea } from '@/shared/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Select } from '@/shared/ui/select';
+import { toast } from '@/shared/ui/toaster';
 import { useTranslation } from 'react-i18next';
 
 export function CreateDocumentPage() {

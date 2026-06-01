@@ -1,18 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
+import { supabase } from '@/shared/api/supabase';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
 import { Plus, Files, Settings, Eye, Edit, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { formatDate } from '../../shared/lib/utils';
+import { formatDate } from '@/shared/lib/utils';
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../shared/ui/dialog';
-import { Input } from '../../shared/ui/input';
-import { Textarea } from '../../shared/ui/textarea';
-import { Select } from '../../shared/ui/select';
-import { toast } from '../../shared/ui/toaster';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/shared/ui/dialog';
+import { Input } from '@/shared/ui/input';
+import { Textarea } from '@/shared/ui/textarea';
+import { Select } from '@/shared/ui/select';
+import { toast } from '@/shared/ui/toaster';
 
 type Template = {
   id: string;

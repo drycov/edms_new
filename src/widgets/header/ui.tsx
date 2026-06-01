@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Bell, Search, User, LogOut, Menu } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { useTranslation } from 'react-i18next';
 
 export function Header() {

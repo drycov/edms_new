@@ -1,15 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
-import { Card, CardContent } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
+import { supabase } from '@/shared/api/supabase';
+import { Card, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
 import { Plus, FolderTree, ChevronRight, ChevronDown, Edit, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../shared/ui/dialog';
-import { Input } from '../../shared/ui/input';
-import { Textarea } from '../../shared/ui/textarea';
-import { toast } from '../../shared/ui/toaster';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/shared/ui/dialog';
+import { Input } from '@/shared/ui/input';
+import { Textarea } from '@/shared/ui/textarea';
+import { toast } from '@/shared/ui/toaster';
 
 type NomenclatureItem = {
   id: string;

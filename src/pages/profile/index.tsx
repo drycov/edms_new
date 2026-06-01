@@ -1,14 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { User, Mail, Phone, Building, Clock, Edit2, Save } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
-import { Input } from '../../shared/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
 import { useTranslation } from 'react-i18next';
-import { formatDate } from '../../shared/lib/utils';
+import { formatDate } from '@/shared/lib/utils';
 import { useState } from 'react';
-import { toast } from '../../shared/ui/toaster';
+import { toast } from '@/shared/ui/toaster';
 
 export function ProfilePage() {
   const { t } = useTranslation();

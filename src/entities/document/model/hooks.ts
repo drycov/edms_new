@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import type { DocumentFilters, DocumentWithRelations } from './types';
 
 const documentKeys = {

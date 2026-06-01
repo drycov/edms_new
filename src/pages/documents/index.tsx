@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
+import { supabase } from '@/shared/api/supabase';
 import { Plus, Search, Eye, Edit, Trash2, FileText } from 'lucide-react';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
-import { Input } from '../../shared/ui/input';
-import { Card } from '../../shared/ui/card';
-import { formatDate } from '../../shared/lib/utils';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { Card } from '@/shared/ui/card';
+import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
-import { toast } from '../../shared/ui/toaster';
+import { toast } from '@/shared/ui/toaster';
 
 type DocumentStatus = 'draft' | 'registered' | 'in_workflow' | 'pending_approval' | 'approved' | 'rejected' | 'signed' | 'archived';
 

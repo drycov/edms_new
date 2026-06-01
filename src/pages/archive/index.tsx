@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../shared/api/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
-import { Badge } from '../../shared/ui/badge';
-import { Button } from '../../shared/ui/button';
-import { Input } from '../../shared/ui/input';
+import { supabase } from '@/shared/api/supabase';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
 import { Archive, Lock, Download, RotateCcw, Eye } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { formatDate } from '../../shared/lib/utils';
+import { formatDate } from '@/shared/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 
