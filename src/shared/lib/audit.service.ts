@@ -53,6 +53,11 @@ export enum AuditAction {
   RELATION_CREATED = 'relation_created',
   RELATION_DELETED = 'relation_deleted',
 
+  // Notification actions
+  NOTIFICATION_CREATED = 'notification_created',
+  NOTIFICATION_READ = 'notification_read',
+  NOTIFICATION_DELETED = 'notification_deleted',
+
   // User actions
   USER_LOGGED_IN = 'user_logged_in',
   USER_LOGGED_OUT = 'user_logged_out',
@@ -183,6 +188,18 @@ class AuditService {
     changes?: Record<string, any>
   ): Promise<void> {
     await this.success(context, action, 'task', taskId, changes);
+  }
+
+  /**
+   * Log notification action
+   */
+  async notification(
+    context: AuditContext,
+    action: AuditAction,
+    notificationId: string,
+    changes?: Record<string, any>
+  ): Promise<void> {
+    await this.success(context, action, 'notification', notificationId, changes);
   }
 }
 
