@@ -1,17 +1,30 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/shared/api/supabase';
-import { Settings, Users, Building, Shield, Database, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
-import { Button } from '@/shared/ui/button';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+
+import { ADMIN_CARDS, SYSTEM_OVERVIEW_KEYS, type AdminCardConfig } from './constants';
+
+type Stats = {
+  usersCount: number;
+  departmentsCount: number;
+  rolesCount: number;
+  documentsCount: number;
+  workflowsCount: number;
+  templatesCount: number;
+};
+
+type Migrations = {
+  applied: number;
+};
 
 export function AdminPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<Stats>({
     queryKey: ['admin-stats'],
     queryFn: async () => {
       const user = (await supabase.auth.getUser()).data.user;
@@ -33,12 +46,36 @@ export function AdminPage() {
         { count: workflowsCount },
         { count: templatesCount },
       ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('organization_id', profile.organization_id),
-        supabase.from('departments').select('*', { count: 'exact', head: true }).eq('organization_id', profile.organization_id),
-        supabase.from('roles').select('*', { count: 'exact', head: true }).eq('organization_id', profile.organization_id),
-        supabase.from('documents').select('*', { count: 'exact', head: true }).eq('organization_id', profile.organization_id).eq('is_deleted', false),
-        supabase.from('workflows').select('*', { count: 'exact', head: true }).eq('organization_id', profile.organization_id),
-        supabase.from('document_templates').select('*', { count: 'exact', head: true }).eq('organization_id', profile.organization_id),
+        supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', profile.organization_id),
+
+        supabase
+          .from('departments')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', profile.organization_id),
+
+        supabase
+          .from('roles')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', profile.organization_id),
+
+        supabase
+          .from('documents')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', profile.organization_id)
+          .eq('is_deleted', false),
+
+        supabase
+          .from('workflows')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', profile.organization_id),
+
+        supabase
+          .from('document_templates')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', profile.organization_id),
       ]);
 
       return {
@@ -52,140 +89,99 @@ export function AdminPage() {
     },
   });
 
-  const { data: migrations } = useQuery({
+  const { data: migrations } = useQuery<Migrations>({
     queryKey: ['migrations'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('created_at')
-        .limit(1);
-
-      // Return migration status based on table existence
+      await supabase.from('audit_logs').select('created_at').limit(1);
       return { applied: 5 };
     },
   });
 
+  const handleCardClick = (card: AdminCardConfig) => {
+    if (card.route) {
+      navigate(card.route);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* HEADER */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('admin.title')}</h1>
-        <p className="text-gray-500 mt-1">{t('admin.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {t('admin.title')}
+        </h1>
+        <p className="text-gray-500 mt-1">
+          {t('admin.subtitle')}
+        </p>
       </div>
 
+      {/* CARDS */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="hover:border-blue-300 cursor-pointer">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Users className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{t('admin.usersRoles')}</h3>
-                <p className="text-sm text-gray-500">{t('admin.usersRolesDesc')}</p>
-              </div>
-            </div>
-            <Badge variant="secondary">{stats?.usersCount || 0} {t('admin.activeUsers')}</Badge>
-          </CardContent>
-        </Card>
+        {ADMIN_CARDS.map((card: AdminCardConfig) => {
+          const Icon = card.icon;
 
-        <Card className="hover:border-blue-300 cursor-pointer">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <Building className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{t('admin.organization')}</h3>
-                <p className="text-sm text-gray-500">{t('admin.organizationDesc')}</p>
-              </div>
-            </div>
-            <Badge variant="secondary">{stats?.departmentsCount || 0} {t('admin.departments')}</Badge>
-          </CardContent>
-        </Card>
+          return (
+            <Card
+              key={card.key}
+              onClick={() => handleCardClick(card)}
+              className="
+                hover:border-blue-300
+                hover:shadow-md
+                cursor-pointer
+                transition
+                active:scale-[0.99]
+              "
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div
+                    className={`h-10 w-10 rounded-lg ${card.bg} flex items-center justify-center`}
+                  >
+                    <Icon className={`h-5 w-5 ${card.color}`} />
+                  </div>
 
-        <Card className="hover:border-blue-300 cursor-pointer">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Shield className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{t('admin.security')}</h3>
-                <p className="text-sm text-gray-500">{t('admin.securityDesc')}</p>
-              </div>
-            </div>
-            <Badge variant="success">{t('admin.allSecure')}</Badge>
-          </CardContent>
-        </Card>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {t(card.title)}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {t(card.description)}
+                    </p>
+                  </div>
+                </div>
 
-        <Card className="hover:border-blue-300 cursor-pointer">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-lg bg-cyan-100 flex items-center justify-center">
-                <Database className="h-5 w-5 text-cyan-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{t('admin.database')}</h3>
-                <p className="text-sm text-gray-500">{t('admin.databaseDesc')}</p>
-              </div>
-            </div>
-            <Badge variant="secondary">v{migrations?.applied || 0} {t('admin.applied')}</Badge>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-blue-300 cursor-pointer">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Zap className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{t('admin.integrations')}</h3>
-                <p className="text-sm text-gray-500">{t('admin.integrationsDesc')}</p>
-              </div>
-            </div>
-            <Badge variant="secondary">3 {t('admin.activeServices')}</Badge>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-blue-300 cursor-pointer">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                <Settings className="h-5 w-5 text-gray-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{t('admin.systemSettings')}</h3>
-                <p className="text-sm text-gray-500">{t('admin.systemSettingsDesc')}</p>
-              </div>
-            </div>
-            <Badge variant="secondary">{t('common.success')}</Badge>
-          </CardContent>
-        </Card>
+                <Badge variant={card.badgeColor || 'secondary'}>
+                  {card.badgeValue?.(stats, t, migrations)}
+                </Badge>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
+      {/* SYSTEM OVERVIEW */}
       <Card>
         <CardHeader>
           <CardTitle>System Overview</CardTitle>
         </CardHeader>
+
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
-            <div className="p-4 rounded-lg bg-gray-50">
-              <p className="text-sm text-gray-500">{t('documents.title')}</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.documentsCount || 0}</p>
-            </div>
-            <div className="p-4 rounded-lg bg-gray-50">
-              <p className="text-sm text-gray-500">{t('workflows.title')}</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.workflowsCount || 0}</p>
-            </div>
-            <div className="p-4 rounded-lg bg-gray-50">
-              <p className="text-sm text-gray-500">{t('templates.title')}</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.templatesCount || 0}</p>
-            </div>
-            <div className="p-4 rounded-lg bg-gray-50">
-              <p className="text-sm text-gray-500">{t('admin.rolesRoles')}</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.rolesCount || 0}</p>
-            </div>
+            {SYSTEM_OVERVIEW_KEYS.map(
+              (item: { key: keyof Stats; label: string }) => (
+                <div
+                  key={item.key}
+                  className="p-4 rounded-lg bg-gray-50"
+                >
+                  <p className="text-sm text-gray-500">
+                    {t(item.label)}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stats?.[item.key] ?? 0}
+                  </p>
+                </div>
+              )
+            )}
           </div>
         </CardContent>
       </Card>
