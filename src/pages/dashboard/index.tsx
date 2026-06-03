@@ -1,86 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/shared/api/supabase';
+import { FileText, GitBranch, CheckSquare, Clock, TrendingUp, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
 import { formatDate, formatNumber } from '@/shared/lib/utils';
-import {
-  FileText,
-  GitBranch,
-  CheckSquare,
-  Clock,
-  TrendingUp,
-  AlertCircle,
-} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useDashboardStats } from './model/useDashboard';
 
 export function DashboardPage() {
   const { t } = useTranslation();
-
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: async () => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      const organizationId = profile?.organization_id;
-      if (!organizationId) throw new Error('No organization');
-
-      const [
-        documentsCount,
-        workflowsCount,
-        pendingTasks,
-        recentDocuments,
-        activeWorkflows,
-      ] = await Promise.all([
-        supabase
-          .from('documents')
-          .select('id', { count: 'exact', head: true })
-          .eq('organization_id', organizationId)
-          .eq('is_deleted', false),
-        supabase
-          .from('workflow_runs')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'running'),
-        supabase
-          .from('workflow_tasks')
-          .select('id', { count: 'exact', head: true })
-          .eq('assignee_id', user.id)
-          .eq('status', 'pending'),
-        supabase
-          .from('documents')
-          .select('id, title, status, created_at, registration_number')
-          .eq('organization_id', organizationId)
-          .eq('is_deleted', false)
-          .order('created_at', { ascending: false })
-          .limit(5),
-        supabase
-          .from('workflow_runs')
-          .select(`
-            id,
-            status,
-            created_at,
-            workflow:workflows(name)
-          `)
-          .eq('status', 'running')
-          .order('created_at', { ascending: false })
-          .limit(5),
-      ]);
-
-      return {
-        documentsCount: documentsCount.count || 0,
-        workflowsCount: workflowsCount.count || 0,
-        pendingTasks: pendingTasks.count || 0,
-        recentDocuments: recentDocuments.data || [],
-        activeWorkflows: activeWorkflows.data || [],
-      };
-    },
-  });
+  const { data: stats, isLoading } = useDashboardStats();
 
   const statCards = [
     {
@@ -112,7 +39,7 @@ export function DashboardPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     );
   }

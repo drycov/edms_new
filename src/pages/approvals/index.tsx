@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/shared/api/supabase';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
 import { Card, CardContent } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
@@ -8,26 +8,8 @@ import { Textarea } from '@/shared/ui/textarea';
 import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from '@/shared/ui/toaster';
-
-type ApprovalTask = {
-  id: string;
-  status: string;
-  due_date: string | null;
-  created_at: string;
-  workflow_run: {
-    id: string;
-    document: {
-      id: string;
-      title: string;
-      registration_number: string | null;
-    };
-    workflow: {
-      name: string;
-    };
-  };
-};
+import { useApprovalTasks, useApproveTask } from './model/useApprovals';
 
 export function ApprovalsPage() {
   const { t } = useTranslation();
@@ -35,83 +17,28 @@ export function ApprovalsPage() {
   const queryClient = useQueryClient();
   const [comment, setComment] = useState<Record<string, string>>({});
 
-  const { data: tasks, isLoading } = useQuery({
-    queryKey: ['approval-tasks'],
-    queryFn: async () => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
-
-      const { data, error } = await supabase
-        .from('workflow_tasks')
-        .select(`
-          id,
-          status,
-          due_date,
-          created_at,
-          workflow_run:workflow_runs(
-            id,
-            document:documents(
-              id,
-              title,
-              registration_number
-            ),
-            workflow:workflows(name)
-          )
-        `)
-        .eq('assignee_id', user.id)
-        .eq('task_type', 'approval')
-        .in('status', ['pending', 'in_progress'])
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      return data as ApprovalTask[];
-    },
-  });
-
-  const approveTask = useMutation({
-    mutationFn: async ({ taskId, approved, commentText }: { taskId: string; approved: boolean; commentText?: string }) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
-
-      const { error: updateError } = await supabase
-        .from('workflow_tasks')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          outcome: approved ? 'approved' : 'rejected',
-          comment: commentText || null,
-        })
-        .eq('id', taskId);
-
-      if (updateError) throw updateError;
-
-      // Create workflow event
-      const { data: task } = await supabase
-        .from('workflow_tasks')
-        .select('workflow_run_id')
-        .eq('id', taskId)
-        .single();
-
-      if (task) {
-        await supabase.from('workflow_events').insert({
-          workflow_run_id: task.workflow_run_id,
-          event_type: approved ? 'task_approved' : 'task_rejected',
-          data: { task_id: taskId, user_id: user.id, comment: commentText },
-        });
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['approval-tasks'] });
-      toast.success(t('common.success'), t('approvals.approve'));
-    },
-  });
+  const { data: tasks, isLoading } = useApprovalTasks();
+  const approveTask = useApproveTask();
 
   const handleApprove = (taskId: string, approved: boolean) => {
-    approveTask.mutate({
-      taskId,
-      approved,
-      commentText: comment[taskId],
-    });
+    approveTask.mutate(
+      {
+        taskId,
+        approved,
+        commentText: comment[taskId],
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['approval-tasks'] });
+          toast.success(t('common.success'), t('approvals.approve'));
+          setComment((prev) => {
+            const next = { ...prev };
+            delete next[taskId];
+            return next;
+          });
+        },
+      },
+    );
   };
 
   return (
@@ -123,7 +50,7 @@ export function ApprovalsPage() {
 
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
       ) : tasks?.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">

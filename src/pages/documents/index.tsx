@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/shared/api/supabase';
 import { Plus, Search, Eye, Edit, Trash2, FileText } from 'lucide-react';
 import { Badge } from '@/shared/ui/badge';
@@ -10,31 +10,9 @@ import { Card } from '@/shared/ui/card';
 import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/shared/ui/toaster';
-
-type DocumentStatus = 'draft' | 'registered' | 'in_workflow' | 'pending_approval' | 'approved' | 'rejected' | 'signed' | 'archived';
-
-type Document = {
-  id: string;
-  title: string;
-  description: string | null;
-  status: DocumentStatus;
-  registration_number: string | null;
-  registration_date: string | null;
-  version_label: string;
-  created_at: string;
-  document_type: { name: string } | null;
-};
-
-const statusColors: Record<DocumentStatus, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  registered: 'bg-blue-100 text-blue-800',
-  in_workflow: 'bg-cyan-100 text-cyan-800',
-  pending_approval: 'bg-amber-100 text-amber-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
-  signed: 'bg-emerald-100 text-emerald-800',
-  archived: 'bg-slate-100 text-slate-800',
-};
+import { useDocuments } from './model/useDocuments';
+import { statusColors } from './model/types';
+import type { DocumentStatus } from './model/types';
 
 export function DocumentsPage() {
   const { t } = useTranslation();
@@ -43,50 +21,7 @@ export function DocumentsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | ''>('');
 
-  const { data: documents, isLoading } = useQuery({
-    queryKey: ['documents', search, statusFilter],
-    queryFn: async () => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!profile?.organization_id) throw new Error('No organization');
-
-      let query = supabase
-        .from('documents')
-        .select(`
-          id,
-          title,
-          description,
-          status,
-          registration_number,
-          registration_date,
-          version_label,
-          created_at,
-          document_type:document_types(name)
-        `)
-        .eq('organization_id', profile.organization_id)
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false });
-
-      if (search) {
-        query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
-      }
-
-      if (statusFilter) {
-        query = query.eq('status', statusFilter);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Document[];
-    },
-  });
+  const { data: documents, isLoading } = useDocuments(search, statusFilter);
 
   const deleteDocument = useMutation({
     mutationFn: async (id: string) => {
@@ -113,10 +48,7 @@ export function DocumentsPage() {
     'archived',
   ];
 
-  const getStatusLabel = (status: DocumentStatus) => {
-    const key = `documents.${status}`;
-    return t(key);
-  };
+  const getStatusLabel = (status: DocumentStatus) => t(`documents.${status}`);
 
   return (
     <div className="space-y-6">
@@ -175,7 +107,7 @@ export function DocumentsPage() {
       <div className="grid gap-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>
         ) : documents?.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-500">
