@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/shared/api/supabase';
+import { getCurrentUser, createAuditLog } from '@/shared/lib/query-utils';
 
-// Hook to fetch document versions
 export function useDocumentVersions(documentId: string) {
   return useQuery({
     queryKey: ['document-versions', documentId],
@@ -22,7 +22,6 @@ export function useDocumentVersions(documentId: string) {
   });
 }
 
-// Hook to create a new version
 export function useCreateVersion() {
   const queryClient = useQueryClient();
 
@@ -36,10 +35,8 @@ export function useCreateVersion() {
       content: string;
       changeSummary?: string;
     }) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const user = await getCurrentUser();
 
-      // Get current document
       const { data: doc, error: docError } = await supabase
         .from('documents')
         .select('version_number, title, description, content')
@@ -48,22 +45,18 @@ export function useCreateVersion() {
 
       if (docError) throw docError;
 
-      // Create new version
       const newVersionNumber = (doc.version_number || 0) + 1;
 
-      const { error: versionError } = await supabase
-        .from('document_versions')
-        .insert({
-          document_id: documentId,
-          version_number: newVersionNumber,
-          content: doc.content,
-          created_by: user.id,
-          change_summary: changeSummary || `Version ${newVersionNumber}`,
-        });
+      const { error: versionError } = await supabase.from('document_versions').insert({
+        document_id: documentId,
+        version_number: newVersionNumber,
+        content: doc.content,
+        created_by: user.id,
+        change_summary: changeSummary || `Version ${newVersionNumber}`,
+      });
 
       if (versionError) throw versionError;
 
-      // Update document
       const { error: updateError } = await supabase
         .from('documents')
         .update({
@@ -76,6 +69,11 @@ export function useCreateVersion() {
 
       if (updateError) throw updateError;
 
+      await createAuditLog('document_version_created', 'document', 'document_version', {
+        document_id: documentId,
+        version_number: newVersionNumber,
+      });
+
       return { versionNumber: newVersionNumber };
     },
     onSuccess: (_, variables) => {
@@ -85,7 +83,6 @@ export function useCreateVersion() {
   });
 }
 
-// Hook to restore a version
 export function useRestoreVersion() {
   const queryClient = useQueryClient();
 
@@ -97,10 +94,8 @@ export function useRestoreVersion() {
       documentId: string;
       versionId: string;
     }) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const user = await getCurrentUser();
 
-      // Get version content
       const { data: version, error: versionError } = await supabase
         .from('document_versions')
         .select('*')
@@ -109,7 +104,6 @@ export function useRestoreVersion() {
 
       if (versionError) throw versionError;
 
-      // Create a new version with current content before restore
       const { data: doc } = await supabase
         .from('documents')
         .select('version_number, content')
@@ -126,7 +120,6 @@ export function useRestoreVersion() {
         });
       }
 
-      // Restore content
       const { error: updateError } = await supabase
         .from('documents')
         .update({
@@ -137,6 +130,12 @@ export function useRestoreVersion() {
 
       if (updateError) throw updateError;
 
+      await createAuditLog('document_version_restored', 'document', 'document_version', {
+        document_id: documentId,
+        version_id: versionId,
+        version_number: version.version_number,
+      });
+
       return version;
     },
     onSuccess: (_, variables) => {
@@ -146,11 +145,10 @@ export function useRestoreVersion() {
   });
 }
 
-// Hook to compare two versions
 export function useCompareVersions(
   documentId: string,
   versionId1: string | null,
-  versionId2: string | null
+  versionId2: string | null,
 ) {
   return useQuery({
     queryKey: ['compare-versions', documentId, versionId1, versionId2],

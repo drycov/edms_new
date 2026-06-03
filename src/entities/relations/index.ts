@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/shared/api/supabase';
+import { getCurrentUser, createAuditLog } from '@/shared/lib/query-utils';
 
 export type DocumentRelation = {
   id: string;
@@ -21,49 +22,46 @@ export type DocumentRelation = {
   };
 };
 
-// Hook to fetch document relations
 export function useDocumentRelations(documentId: string) {
   return useQuery({
     queryKey: ['document-relations', documentId],
     queryFn: async () => {
-      // Get outgoing relations
-      const { data: outgoing, error: outgoingError } = await supabase
-        .from('document_relations')
-        .select(`
-          id,
-          source_document_id,
-          target_document_id,
-          relation_type,
-          created_at,
-          target_document:documents!document_relations_target_document_id_fkey(
+      const [{ data: outgoing, error: outgoingError }, { data: incoming, error: incomingError }] = await Promise.all([
+        supabase
+          .from('document_relations')
+          .select(`
             id,
-            title,
-            registration_number,
-            status
-          )
-        `)
-        .eq('source_document_id', documentId);
+            source_document_id,
+            target_document_id,
+            relation_type,
+            created_at,
+            target_document:documents!document_relations_target_document_id_fkey(
+              id,
+              title,
+              registration_number,
+              status
+            )
+          `)
+          .eq('source_document_id', documentId),
+        supabase
+          .from('document_relations')
+          .select(`
+            id,
+            source_document_id,
+            target_document_id,
+            relation_type,
+            created_at,
+            source_document:documents!document_relations_source_document_id_fkey(
+              id,
+              title,
+              registration_number,
+              status
+            )
+          `)
+          .eq('target_document_id', documentId),
+      ]);
 
       if (outgoingError) throw outgoingError;
-
-      // Get incoming relations
-      const { data: incoming, error: incomingError } = await supabase
-        .from('document_relations')
-        .select(`
-          id,
-          source_document_id,
-          target_document_id,
-          relation_type,
-          created_at,
-          source_document:documents!document_relations_source_document_id_fkey(
-            id,
-            title,
-            registration_number,
-            status
-          )
-        `)
-        .eq('target_document_id', documentId);
-
       if (incomingError) throw incomingError;
 
       return {
@@ -75,7 +73,6 @@ export function useDocumentRelations(documentId: string) {
   });
 }
 
-// Hook to create relation
 export function useCreateRelation() {
   const queryClient = useQueryClient();
 
@@ -89,10 +86,8 @@ export function useCreateRelation() {
       targetDocumentId: string;
       relationType: DocumentRelation['relation_type'];
     }) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const user = await getCurrentUser();
 
-      // Check if relation already exists
       const { data: existing } = await supabase
         .from('document_relations')
         .select('id')
@@ -100,9 +95,7 @@ export function useCreateRelation() {
         .eq('target_document_id', targetDocumentId)
         .maybeSingle();
 
-      if (existing) {
-        throw new Error('Relation already exists');
-      }
+      if (existing) throw new Error('Relation already exists');
 
       const { error } = await supabase.from('document_relations').insert({
         source_document_id: sourceDocumentId,
@@ -113,66 +106,42 @@ export function useCreateRelation() {
 
       if (error) throw error;
 
-      // Create audit log
-      await supabase.from('audit_logs').insert({
-        action: 'document_relation_created',
-        action_category: 'document',
-        entity_type: 'document_relation',
-        data: {
-          source_document_id: sourceDocumentId,
-          target_document_id: targetDocumentId,
-          relation_type: relationType,
-        },
+      await createAuditLog('document_relation_created', 'document', 'document_relation', {
+        source_document_id: sourceDocumentId,
+        target_document_id: targetDocumentId,
+        relation_type: relationType,
       });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['document-relations', variables.sourceDocumentId] });
+      queryClient.invalidateQueries({ queryKey: ['document-relations', variables.targetDocumentId] });
     },
   });
 }
 
-// Hook to delete relation
 export function useDeleteRelation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      relationId,
-      documentId,
-    }: {
-      relationId: string;
-      documentId: string;
-    }) => {
-      const { error } = await supabase
-        .from('document_relations')
-        .delete()
-        .eq('id', relationId);
-
+    mutationFn: async ({ relationId }: { relationId: string }) => {
+      const { error } = await supabase.from('document_relations').delete().eq('id', relationId);
       if (error) throw error;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['document-relations', variables.documentId] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['document-relations'] });
     },
   });
 }
 
-// Hook to search documents for relation
 export function useSearchDocumentsForRelation(search: string, excludeId: string) {
   return useQuery({
     queryKey: ['search-documents-relation', search, excludeId],
     queryFn: async () => {
       if (!search || search.length < 2) return [];
 
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!profile?.organization_id) return [];
+      const { user, profile } = await import('@/shared/lib/query-utils').then((m) =>
+        m.getCurrentUserOrganization(),
+      );
 
       const { data, error } = await supabase
         .from('documents')

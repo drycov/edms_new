@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/shared/api/supabase';
+import { getCurrentUser, getCurrentUserOrganization, createAuditLog } from '@/shared/lib/query-utils';
 
-// Hook to delegate task
 export function useDelegateTask() {
   const queryClient = useQueryClient();
 
@@ -15,10 +15,8 @@ export function useDelegateTask() {
       newAssigneeId: string;
       reason?: string;
     }) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const user = await getCurrentUser();
 
-      // Get current task
       const { data: task, error: taskError } = await supabase
         .from('workflow_tasks')
         .select('*')
@@ -27,7 +25,6 @@ export function useDelegateTask() {
 
       if (taskError) throw taskError;
 
-      // Update task
       const { error: updateError } = await supabase
         .from('workflow_tasks')
         .update({
@@ -41,7 +38,6 @@ export function useDelegateTask() {
 
       if (updateError) throw updateError;
 
-      // Create event
       await supabase.from('workflow_events').insert({
         workflow_run_id: task.workflow_run_id,
         event_type: 'task_delegated',
@@ -53,6 +49,13 @@ export function useDelegateTask() {
         },
       });
 
+      await createAuditLog('task_delegated', 'workflow', 'workflow_task', {
+        task_id: taskId,
+        from_user: user.id,
+        to_user: newAssigneeId,
+        reason,
+      });
+
       return task;
     },
     onSuccess: () => {
@@ -62,7 +65,6 @@ export function useDelegateTask() {
   });
 }
 
-// Hook to reassign task (admin only)
 export function useReassignTask() {
   const queryClient = useQueryClient();
 
@@ -76,8 +78,7 @@ export function useReassignTask() {
       newAssigneeId: string;
       reason?: string;
     }) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const user = await getCurrentUser();
 
       const { data: task, error: taskError } = await supabase
         .from('workflow_tasks')
@@ -110,6 +111,13 @@ export function useReassignTask() {
         },
       });
 
+      await createAuditLog('task_reassigned', 'workflow', 'workflow_task', {
+        task_id: taskId,
+        reassigned_by: user.id,
+        new_assignee: newAssigneeId,
+        reason,
+      });
+
       return task;
     },
     onSuccess: () => {
@@ -119,23 +127,12 @@ export function useReassignTask() {
   });
 }
 
-// Hook to get delegatable users
 export function useDelegatableUsers() {
   return useQuery({
     queryKey: ['delegatable-users'],
     queryFn: async () => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const { user, profile } = await getCurrentUserOrganization();
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id, department_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!profile?.organization_id) return [];
-
-      // Get users from same organization
       const { data, error } = await supabase
         .from('profiles')
         .select('id, full_name, email, position')

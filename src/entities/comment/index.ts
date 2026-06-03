@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/shared/api/supabase';
+import { getCurrentUser, createAuditLog } from '@/shared/lib/query-utils';
 
 export type Comment = {
   id: string;
@@ -19,7 +20,6 @@ export type Comment = {
   replies?: Comment[];
 };
 
-// Hook to fetch document comments
 export function useDocumentComments(documentId: string) {
   return useQuery({
     queryKey: ['document-comments', documentId],
@@ -36,7 +36,6 @@ export function useDocumentComments(documentId: string) {
 
       if (error) throw error;
 
-      // Fetch replies for each comment
       const commentsWithReplies = await Promise.all(
         (data || []).map(async (comment) => {
           const { data: replies } = await supabase
@@ -52,7 +51,7 @@ export function useDocumentComments(documentId: string) {
             ...comment,
             replies: replies || [],
           };
-        })
+        }),
       );
 
       return commentsWithReplies as Comment[];
@@ -61,7 +60,6 @@ export function useDocumentComments(documentId: string) {
   });
 }
 
-// Hook to create comment
 export function useCreateComment() {
   const queryClient = useQueryClient();
 
@@ -77,8 +75,7 @@ export function useCreateComment() {
       parentId?: string;
       position?: { page: number; x: number; y: number };
     }) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const user = await getCurrentUser();
 
       const { error } = await supabase.from('document_comments').insert({
         document_id: documentId,
@@ -89,6 +86,11 @@ export function useCreateComment() {
       });
 
       if (error) throw error;
+
+      await createAuditLog('comment_created', 'document', 'document_comment', {
+        document_id: documentId,
+        parent_id: parentId || null,
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['document-comments', variables.documentId] });
@@ -96,7 +98,6 @@ export function useCreateComment() {
   });
 }
 
-// Hook to update comment
 export function useUpdateComment() {
   const queryClient = useQueryClient();
 
@@ -116,6 +117,11 @@ export function useUpdateComment() {
         .eq('id', commentId);
 
       if (error) throw error;
+
+      await createAuditLog('comment_updated', 'document', 'document_comment', {
+        comment_id: commentId,
+        document_id: documentId,
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['document-comments', variables.documentId] });
@@ -123,7 +129,6 @@ export function useUpdateComment() {
   });
 }
 
-// Hook to delete comment
 export function useDeleteComment() {
   const queryClient = useQueryClient();
 
@@ -135,12 +140,14 @@ export function useDeleteComment() {
       commentId: string;
       documentId: string;
     }) => {
-      const { error } = await supabase
-        .from('document_comments')
-        .delete()
-        .eq('id', commentId);
+      const { error } = await supabase.from('document_comments').delete().eq('id', commentId);
 
       if (error) throw error;
+
+      await createAuditLog('comment_deleted', 'document', 'document_comment', {
+        comment_id: commentId,
+        document_id: documentId,
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['document-comments', variables.documentId] });
@@ -148,7 +155,6 @@ export function useDeleteComment() {
   });
 }
 
-// Hook to resolve comment
 export function useResolveComment() {
   const queryClient = useQueryClient();
 
@@ -160,8 +166,7 @@ export function useResolveComment() {
       commentId: string;
       documentId: string;
     }) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+      const user = await getCurrentUser();
 
       const { error } = await supabase
         .from('document_comments')
@@ -172,6 +177,12 @@ export function useResolveComment() {
         .eq('id', commentId);
 
       if (error) throw error;
+
+      await createAuditLog('comment_resolved', 'document', 'document_comment', {
+        comment_id: commentId,
+        document_id: documentId,
+        resolved_by: user.id,
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['document-comments', variables.documentId] });
