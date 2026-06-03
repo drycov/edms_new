@@ -8,7 +8,11 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "setup": "bash scripts/setup.sh",
+    "setup:supabase": "bash scripts/setup-supabase.sh",
+    "migrate": "bash scripts/migrate.sh",
+    "deploy:functions": "bash scripts/deploy-functions.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
