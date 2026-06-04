@@ -1,41 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/shared/api/supabase';
 import { Plus, Search, Eye, Edit, Trash2, FileText } from 'lucide-react';
-import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Card } from '@/shared/ui/card';
 import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/shared/ui/toaster';
-import { useDocuments } from './model/useDocuments';
+import { useDocumentQueries, useDocumentMutations } from '@/entities/document';
 import { statusColors } from './model/types';
 import type { DocumentStatus } from './model/types';
+import { getCurrentUser } from '@/shared/lib/query-utils';
 
 export function DocumentsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | ''>('');
 
-  const { data: documents, isLoading } = useDocuments(search, statusFilter);
-
-  const deleteDocument = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('documents')
-        .update({ is_deleted: true })
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
-      toast.success(t('common.success'), t('common.delete'));
-    },
+  const { data: documents, isLoading } = useDocumentQueries.useList({
+    searchQuery: search,
+    status: statusFilter || undefined,
   });
+
+  const deleteDocument = useDocumentMutations.useDelete();
 
   const statuses: DocumentStatus[] = [
     'draft',
@@ -197,7 +185,14 @@ export function DocumentsPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (confirm(t('common.confirm'))) {
-                                deleteDocument.mutate(doc.id);
+                                deleteDocument.mutate(doc.id, {
+                                  onSuccess: () => {
+                                    toast.success(t('common.success'), t('common.delete'));
+                                  },
+                                  onError: (error: any) => {
+                                    toast.error(t('common.error'), error.message);
+                                  },
+                                });
                               }
                             }}
                             className="p-2 rounded hover:bg-gray-100"

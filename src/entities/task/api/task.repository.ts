@@ -4,8 +4,8 @@
 
 import { supabase } from '@/shared/api/supabase';
 import { BaseRepository, ApiError } from '@/shared/lib/repository';
-import { Task, TaskFilter, CreateTaskInput, CompleteTaskInput } from './task';
-import { TaskMapper, TaskDTO } from './task.mapper';
+import { Task, TaskFilter, CreateTaskInput, CompleteTaskInput } from '../model/task';
+import { TaskMapper, TaskDTO } from '../model/task.mapper';
 
 export class TaskRepository extends BaseRepository<Task> {
   constructor() {

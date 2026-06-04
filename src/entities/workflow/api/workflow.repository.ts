@@ -9,8 +9,8 @@ import {
   WorkflowFilter,
   CreateWorkflowInput,
   UpdateWorkflowInput,
-} from './workflow';
-import { WorkflowMapper, WorkflowDTO } from './workflow.mapper';
+} from '../model/workflow';
+import { WorkflowMapper, WorkflowDTO } from '../model/workflow.mapper';
 
 export class WorkflowRepository extends BaseRepository<Workflow> {
   constructor() {
