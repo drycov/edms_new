@@ -1,30 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/shared/api/supabase';
+import { useState, useEffect } from 'react';
 import { CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react';
 import { Card, CardContent } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
 import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-
-type Task = {
-  id: string;
-  task_type: string;
-  status: string;
-  due_date: string | null;
-  created_at: string;
-  workflow_run: {
-    id: string;
-    document: {
-      id: string;
-      title: string;
-      registration_number: string | null;
-    };
-    workflow: {
-      name: string;
-    };
-  };
-};
+import { useTaskQueries } from '@/entities/task';
+import { getCurrentUser } from '@/shared/lib/query-utils';
 
 const statusColors: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800',
@@ -36,71 +18,23 @@ const statusColors: Record<string, string> = {
 export function TasksPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [userId, setUserId] = useState<string>('');
 
-  const { data: tasks, isLoading } = useQuery({
-    queryKey: ['my-tasks'],
-    queryFn: async () => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = await getCurrentUser();
+        setUserId(user.id);
+      } catch (error) {
+        console.error('Failed to get current user:', error);
+      }
+    })();
+  }, []);
 
-      const { data, error } = await supabase
-        .from('workflow_tasks')
-        .select(`
-          id,
-          task_type,
-          status,
-          due_date,
-          created_at,
-          workflow_run:workflow_runs(
-            id,
-            document:documents(
-              id,
-              title,
-              registration_number
-            ),
-            workflow:workflows(name)
-          )
-        `)
-        .eq('assignee_id', user.id)
-        .in('status', ['pending', 'in_progress'])
-        .order('due_date', { ascending: true })
-        .order('created_at', { ascending: true });
+  const { data: tasks, isLoading } = useTaskQueries.useAssignedToUser(userId);
 
-      if (error) throw error;
-      return data as Task[];
-    },
-  });
-
-  const { data: completedTasks } = useQuery({
-    queryKey: ['completed-tasks'],
-    queryFn: async () => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
-
-      const { data, error } = await supabase
-        .from('workflow_tasks')
-        .select(`
-          id,
-          task_type,
-          status,
-          completed_at,
-          workflow_run:workflow_runs(
-            id,
-            document:documents(
-              id,
-              title,
-              registration_number
-            )
-          )
-        `)
-        .eq('assignee_id', user.id)
-        .in('status', ['completed', 'delegated'])
-        .order('completed_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      return data;
-    },
+  const { data: completedTasks } = useTaskQueries.useList({
+    status: 'completed',
   });
 
   const getTaskTypeLabel = (type: string) => {
@@ -162,7 +96,7 @@ export function TasksPage() {
                 <Card
                   key={task.id}
                   className="hover:border-blue-300 cursor-pointer"
-                  onClick={() => navigate(`/documents/${task.workflow_run?.document?.id}`)}
+                  onClick={() => navigate(`/documents/${task.workflowRunId}`)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -172,24 +106,24 @@ export function TasksPage() {
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">
-                            {task.workflow_run?.document?.title || 'Document'}
+                            Task {task.taskType}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {getTaskTypeLabel(task.task_type)} - {task.workflow_run?.workflow?.name}
+                            {getTaskTypeLabel(task.taskType)}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {task.due_date && new Date(task.due_date) < new Date() && (
+                        {task.dueDate && new Date(task.dueDate) < new Date() && (
                           <AlertCircle className="h-4 w-4 text-red-500" />
                         )}
                         <Badge className={statusColors[task.status]}>
                           {getStatusLabel(task.status)}
                         </Badge>
-                        {task.due_date && (
+                        {task.dueDate && (
                           <span className="text-xs text-gray-500">
                             <Clock className="h-3 w-3 inline mr-1" />
-                            {formatDate(task.due_date)}
+                            {formatDate(task.dueDate)}
                           </span>
                         )}
                       </div>
@@ -212,14 +146,14 @@ export function TasksPage() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {completedTasks?.slice(0, 10).map((task: any) => (
+              {completedTasks?.slice(0, 10).map((task) => (
                 <Card key={task.id}>
                   <CardContent className="p-3">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      {task.workflow_run?.document?.title || 'Document'}
+                      Task {task.taskType}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {task.completed_at ? formatDate(task.completed_at) : '-'}
+                      {task.completedAt ? formatDate(task.completedAt) : '-'}
                     </p>
                   </CardContent>
                 </Card>

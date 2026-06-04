@@ -1,6 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/shared/api/supabase';
 import { Plus, GitBranch, Settings, Trash2, Play, Pause } from 'lucide-react';
 import { Card, CardContent } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
@@ -18,24 +16,12 @@ import {
 import { Input } from '@/shared/ui/input';
 import { Textarea } from '@/shared/ui/textarea';
 import { toast } from '@/shared/ui/toaster';
-
-type Workflow = {
-  id: string;
-  name: string;
-  code: string;
-  description: string | null;
-  version: number;
-  is_published: boolean;
-  is_active: boolean;
-  trigger_type: string;
-  created_at: string;
-  updated_at: string;
-};
+import { useWorkflowQueries, useWorkflowMutations } from '@/entities/workflow';
+import { getCurrentUserOrganization } from '@/shared/lib/query-utils';
 
 export function WorkflowsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -45,117 +31,35 @@ export function WorkflowsPage() {
     trigger_type: 'manual',
   });
 
-  /**
-   * FETCH WORKFLOWS
-   */
-  const { data: workflows, isLoading } = useQuery({
-    queryKey: ['workflows'],
-    queryFn: async () => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
+  const { data: workflows, isLoading } = useWorkflowQueries.useList({});
+  const createMutation = useWorkflowMutations.useCreate();
+  const deleteMutation = useWorkflowMutations.useDelete();
+  const toggleActiveMutation = useWorkflowMutations.useToggleActive();
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!profile?.organization_id) throw new Error('No organization');
-
-      const { data, error } = await supabase
-        .from('workflows')
-        .select('*')
-        .eq('organization_id', profile.organization_id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data as Workflow[];
-    },
-  });
-
-  /**
-   * CREATE WORKFLOW
-   */
-  const createMutation = useMutation({
-    mutationFn: async (payload: typeof form) => {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!profile?.organization_id) throw new Error('No organization');
-
-      const { data, error } = await supabase
-        .from('workflows')
-        .insert({
-          name: payload.name.trim(),
-          code: payload.code.trim().toUpperCase(),
-          description: payload.description,
-          trigger_type: payload.trigger_type,
-          organization_id: profile.organization_id,
-          created_by: user.id,
-          definition: { nodes: [], edges: [] },
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['workflows'] });
-      setOpen(false);
-      setForm({ name: '', code: '', description: '', trigger_type: 'manual' });
-
-      toast.success(t('common.success'), t('common.create'));
-      navigate(`/workflows/designer/${data.id}`);
-    },
-  });
-
-  /**
-   * DELETE WORKFLOW
-   */
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('workflows').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workflows'] });
-      toast.success(t('common.success'), t('common.delete'));
-    },
-  });
-
-  /**
-   * TOGGLE ACTIVE
-   */
-  const toggleActive = useMutation({
-    mutationFn: async (params: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
-        .from('workflows')
-        .update({ is_active: params.is_active })
-        .eq('id', params.id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workflows'] });
-    },
-  });
-
-  /**
-   * CREATE HANDLER
-   */
   const handleCreate = () => {
     if (!form.name.trim() || !form.code.trim()) {
       toast.error(t('common.error'), 'Name and code required');
       return;
     }
-    createMutation.mutate(form);
+    createMutation.mutate(
+      {
+        name: form.name,
+        code: form.code,
+        description: form.description,
+        triggerType: form.trigger_type,
+      },
+      {
+        onSuccess: (data) => {
+          setOpen(false);
+          setForm({ name: '', code: '', description: '', trigger_type: 'manual' });
+          toast.success(t('common.success'), t('common.create'));
+          navigate(`/workflows/designer/${data.id}`);
+        },
+        onError: (error: any) => {
+          toast.error(t('common.error'), error.message);
+        },
+      }
+    );
   };
 
   return (
@@ -203,12 +107,12 @@ export function WorkflowsPage() {
                   <GitBranch className="h-5 w-5 text-cyan-600" />
 
                   <div className="flex gap-2">
-                    <Badge variant={wf.is_published ? 'success' : 'secondary'}>
-                      {wf.is_published ? 'Published' : 'Draft'}
+                    <Badge variant={wf.isPublished ? 'success' : 'secondary'}>
+                      {wf.isPublished ? 'Published' : 'Draft'}
                     </Badge>
 
-                    <Badge variant={wf.is_active ? 'default' : 'outline'}>
-                      {wf.is_active ? 'Active' : 'Inactive'}
+                    <Badge variant={wf.isActive ? 'default' : 'outline'}>
+                      {wf.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
                 </div>
@@ -225,7 +129,7 @@ export function WorkflowsPage() {
 
                 <div className="flex justify-between items-center mt-4">
                   <span className="text-xs text-gray-400">
-                    {formatDate(wf.updated_at)}
+                    {formatDate(wf.updatedAt)}
                   </span>
 
                   <div className="flex gap-1">
@@ -234,13 +138,13 @@ export function WorkflowsPage() {
                       variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleActive.mutate({
-                          id: wf.id,
-                          is_active: !wf.is_active,
+                        toggleActiveMutation.mutate({
+                          workflowId: wf.id,
+                          isActive: !wf.isActive,
                         });
                       }}
                     >
-                      {wf.is_active ? (
+                      {wf.isActive ? (
                         <Pause className="h-4 w-4" />
                       ) : (
                         <Play className="h-4 w-4" />
@@ -264,7 +168,14 @@ export function WorkflowsPage() {
                       onClick={(e) => {
                         e.stopPropagation();
                         if (confirm(t('common.confirm'))) {
-                          deleteMutation.mutate(wf.id);
+                          deleteMutation.mutate(wf.id, {
+                            onSuccess: () => {
+                              toast.success(t('common.success'), t('common.delete'));
+                            },
+                            onError: (error: any) => {
+                              toast.error(t('common.error'), error.message);
+                            },
+                          });
                         }
                       }}
                     >

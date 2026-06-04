@@ -1,33 +1,39 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { Bell, CheckCheck, Trash2, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { formatDate } from '@/shared/lib/utils';
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from '@/shared/ui/toaster';
-import {
-  useNotifications,
-  useMarkNotificationAsRead,
-  useMarkAllNotificationsAsRead,
-  useDeleteNotification,
-} from './model/useNotifications';
+import { useNotificationQueries, useNotificationMutations } from '@/entities/notification';
+import { getCurrentUser } from '@/shared/lib/query-utils';
 
 export function NotificationsPage() {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [userId, setUserId] = useState<string>('');
 
-  const { data: notifications, isLoading } = useNotifications(filter);
-  const markAsRead = useMarkNotificationAsRead();
-  const markAllAsRead = useMarkAllNotificationsAsRead();
-  const deleteNotification = useDeleteNotification();
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = await getCurrentUser();
+        setUserId(user.id);
+      } catch (error) {
+        console.error('Failed to get current user:', error);
+      }
+    })();
+  }, []);
+
+  const { data: notifications, isLoading } = useNotificationQueries.useForUser(userId);
+  const markAsRead = useNotificationMutations.useMarkAsRead();
+  const markAllAsRead = useNotificationMutations.useMarkAllAsRead();
+  const deleteNotification = useNotificationMutations.useDelete();
 
   const handleMarkAllAsRead = () => {
-    markAllAsRead.mutate(undefined, {
+    if (!userId) return;
+    markAllAsRead.mutate(userId, {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['notifications'] });
         toast.success(t('common.success'), t('notifications.markAllRead'));
       },
     });
@@ -36,7 +42,7 @@ export function NotificationsPage() {
   const handleMarkAsRead = (id: string) => {
     markAsRead.mutate(id, {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        // Invalidation happens automatically in the mutation
       },
     });
   };
@@ -44,7 +50,7 @@ export function NotificationsPage() {
   const handleDelete = (id: string) => {
     deleteNotification.mutate(id, {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        toast.success(t('common.success'), t('common.delete'));
       },
     });
   };
@@ -66,7 +72,7 @@ export function NotificationsPage() {
     }
   };
 
-  const unreadCount = notifications?.filter((n) => !n.is_read).length || 0;
+  const unreadCount = notifications?.filter((n) => !n.isRead).length || 0;
 
   return (
     <div className="space-y-6">
@@ -124,10 +130,10 @@ export function NotificationsPage() {
             <Card
               key={notification.id}
               className={`cursor-pointer transition-colors ${
-                notification.is_read ? 'bg-gray-50' : 'bg-white border-blue-200'
+                notification.isRead ? 'bg-gray-50' : 'bg-white border-blue-200'
               }`}
               onClick={() => {
-                if (!notification.is_read) {
+                if (!notification.isRead) {
                   handleMarkAsRead(notification.id);
                 }
               }}
@@ -135,14 +141,14 @@ export function NotificationsPage() {
               <CardContent className="p-4">
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0 mt-1">
-                    {getNotificationIcon(notification.notification_type)}
+                    {getNotificationIcon(notification.notificationType)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <p className={`font-medium ${notification.is_read ? 'text-gray-600' : 'text-gray-900'}`}>
+                      <p className={`font-medium ${notification.isRead ? 'text-gray-600' : 'text-gray-900'}`}>
                         {notification.title}
                       </p>
-                      {!notification.is_read && (
+                      {!notification.isRead && (
                         <Badge variant="default" className="text-xs">{t('common.info')}</Badge>
                       )}
                     </div>
@@ -150,11 +156,11 @@ export function NotificationsPage() {
                       <p className="text-sm text-gray-500 mb-2">{notification.message}</p>
                     )}
                     <p className="text-xs text-gray-400">
-                      {formatDate(notification.created_at, 'relative')}
+                      {formatDate(notification.createdAt, 'relative')}
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {notification.action_url && (
+                    {notification.actionUrl && (
                       <Button size="sm" variant="outline">
                         {t('common.view')}
                       </Button>

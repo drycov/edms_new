@@ -13,8 +13,8 @@ import {
   DocumentSort,
   CreateDocumentInput,
   UpdateDocumentInput,
-} from './document';
-import { DocumentMapper, DocumentDTO } from './document.mapper';
+} from '../model/document';
+import { DocumentMapper, DocumentDTO } from '../model/document.mapper';
 
 export class DocumentRepository extends BaseRepository<Document> {
   constructor() {
